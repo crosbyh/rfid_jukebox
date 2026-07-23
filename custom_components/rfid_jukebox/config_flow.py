@@ -17,17 +17,20 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 class RFIDJukeboxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for RFID Jukebox."""
+    """Handle a config flow for RFID Jukebox.
+
+    Multiple entries are supported on purpose: each one pairs a tag sensor with a
+    media player (e.g. one per room), and they all share the same mapping file.
+    """
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Handle the initial step."""
         errors: Dict[str, str] = {}
         if user_input is not None:
-            # TODO: Validate user input
-            return self.async_create_entry(title="RFID Jukebox", data=user_input)
+            title = f"RFID Jukebox ({user_input[CONF_MEDIA_PLAYER]})"
+            return self.async_create_entry(title=title, data=user_input)
 
         return self.async_show_form(
             step_id="user",
@@ -67,25 +70,31 @@ class RFIDJukeboxOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        # Options-flow saves land in entry.options, not entry.data, so defaults must
+        # be read from the same merged view __init__.py builds its config from -
+        # otherwise a previously saved option would appear to "reset" every time the
+        # form is reopened.
+        current = {**self.config_entry.data, **self.config_entry.options}
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(
                         CONF_TAG_SENSOR,
-                        default=self.config_entry.data.get(CONF_TAG_SENSOR),
+                        default=current.get(CONF_TAG_SENSOR),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain=["sensor", "input_text"]),
                     ),
                     vol.Required(
                         CONF_MEDIA_PLAYER,
-                        default=self.config_entry.data.get(CONF_MEDIA_PLAYER),
+                        default=current.get(CONF_MEDIA_PLAYER),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="media_player"),
                     ),
                     vol.Optional(
                         CONF_MA_FILESYSTEM,
-                        default=self.config_entry.data.get(CONF_MA_FILESYSTEM),
+                        default=current.get(CONF_MA_FILESYSTEM),
                     ): str,
                 }
             ),

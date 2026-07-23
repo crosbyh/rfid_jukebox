@@ -4,6 +4,7 @@ import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -27,10 +28,14 @@ class MediaTypeSelect(SelectEntity):
         self._jukebox = jukebox
         self._jukebox.media_type_entity = self
         self._attr_name = "RFID Jukebox Media Type"
-        self._attr_unique_id = f"{DOMAIN}_media_type"
+        self._attr_unique_id = f"{DOMAIN}_{jukebox.entry.entry_id}_media_type"
         self._attr_icon = "mdi:music-box-outline"
         self._attr_options = ["playlist", "folder"]
         self._attr_current_option = "folder"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, jukebox.entry.entry_id)},
+            name=jukebox.entry.title,
+        )
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""

@@ -19,8 +19,20 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up RFID Jukebox from a config entry."""
+    from .helpers import MappingStore
+
     hass.data.setdefault(DOMAIN, {})
-    jukebox = RFIDJukebox(hass, entry)
+
+    # All jukebox instances (one per tag sensor / media player pair) share a single
+    # mapping file, so the store is keyed separately from the per-entry jukeboxes below.
+    mapping_store = hass.data[DOMAIN].get("_mapping_store")
+    if mapping_store is None:
+        mapping_file = hass.config.path(DEFAULT_MAPPING_FILE_PATH)
+        mapping_store = MappingStore(hass, mapping_file)
+        hass.data[DOMAIN]["_mapping_store"] = mapping_store
+    await mapping_store.async_ensure_loaded()
+
+    jukebox = RFIDJukebox(hass, entry, mapping_store)
     hass.data[DOMAIN][entry.entry_id] = jukebox
 
     await jukebox.async_setup()
@@ -39,6 +51,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
+        # Only tear down the shared "map_tag" service once every jukebox is gone.
+        if not _all_jukeboxes(hass):
+            hass.services.async_remove(DOMAIN, "map_tag")
 
     return unload_ok
 
@@ -48,15 +63,51 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+def _all_jukeboxes(hass: HomeAssistant):
+    """Return the RFIDJukebox instances currently registered for this integration."""
+    return [v for k, v in hass.data.get(DOMAIN, {}).items() if k != "_mapping_store"]
+
+
+async def _async_map_tag(
+    hass: HomeAssistant, tag_id: str, media_type: str, media_name: str, alias: str = None
+) -> None:
+    """Create/update a tag mapping in the shared store.
+
+    Mappings are shared by every jukebox instance (one file, possibly several tag
+    sensor / media player pairs), so this isn't tied to any single config entry.
+    """
+    if not tag_id or not media_name:
+        _LOGGER.error(
+            "Cannot map tag. Tag ID or Media Name is missing. Tag: '%s', Media: '%s'",
+            tag_id,
+            media_name,
+        )
+        return
+
+    _LOGGER.info("Mapping tag '%s' to %s '%s'", tag_id, media_type, media_name)
+    mapping_store = hass.data[DOMAIN]["_mapping_store"]
+    await mapping_store.async_set_mapping(
+        tag_id, {"type": media_type, "name": media_name, "alias": alias or tag_id}
+    )
+
+    # If any jukebox currently has this tag "active", clear it so the next scan
+    # re-evaluates the (now updated) mapping instead of replaying the old one.
+    for jukebox in _all_jukeboxes(hass):
+        if jukebox.current_tag == tag_id:
+            jukebox.current_tag = None
+
+
 class RFIDJukebox:
     """The main class for the RFID Jukebox integration."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, mapping_store):
         """Initialize the RFID Jukebox."""
         self.hass = hass
         self.entry = entry
-        self.config = entry.data
-        self.mappings = {}
+        # entry.options is what the options flow writes to; entry.data holds the
+        # original setup values. Merge them so options-flow edits actually apply.
+        self.config = {**entry.data, **entry.options}
+        self.mapping_store = mapping_store
         self.last_tag = None
         self.current_tag = None
         self.text_entity = None
@@ -64,16 +115,13 @@ class RFIDJukebox:
         self.media_type_entity = None
         self.last_played_playlist_name = None
 
+    @property
+    def mappings(self):
+        """Return the shared tag mappings."""
+        return self.mapping_store.mappings
+
     async def async_setup(self):
         """Set up the jukebox."""
-        from .helpers import load_mappings
-
-        # Load mappings
-        mapping_file = self.hass.config.path(DEFAULT_MAPPING_FILE_PATH)
-        self.mappings = await self.hass.async_add_executor_job(
-            load_mappings, self.hass, mapping_file
-        )
-
         # Register state listener
         self.entry.async_on_unload(
             event.async_track_state_change_event(
@@ -81,10 +129,20 @@ class RFIDJukebox:
             )
         )
 
-        # Register services
-        self.hass.services.async_register(
-            DOMAIN, "map_tag", self.async_map_tag_service
-        )
+        # Register the shared map_tag service once, no matter how many jukeboxes exist.
+        if not self.hass.services.has_service(DOMAIN, "map_tag"):
+            hass = self.hass
+
+            async def _handle_map_tag(call):
+                await _async_map_tag(
+                    hass,
+                    call.data.get("tag_id"),
+                    call.data.get("media_type", "playlist"),
+                    call.data.get("media_name"),
+                    call.data.get("alias"),
+                )
+
+            self.hass.services.async_register(DOMAIN, "map_tag", _handle_map_tag)
 
     async def async_tag_changed_handler(self, event_data):
         """Handle state changes for the RFID tag sensor."""
@@ -254,36 +312,7 @@ class RFIDJukebox:
         )
 
     async def async_map_tag(self, tag_id: str, media_type: str, media_name: str, alias: str = None):
-        """Map a tag to a media item and save it."""
-        from .helpers import save_mappings
-
-        if not tag_id or not media_name:
-            _LOGGER.error(
-                "Cannot map tag. Tag ID or Media Name is missing. Tag: '%s', Media: '%s'",
-                tag_id,
-                media_name,
-            )
-            return
-
-        _LOGGER.info("Mapping tag '%s' to %s '%s'", tag_id, media_type, media_name)
-        self.mappings[tag_id] = {
-            "type": media_type,
-            "name": media_name,
-            "alias": alias or tag_id,
-        }
-
-        mapping_file = self.hass.config.path(DEFAULT_MAPPING_FILE_PATH)
-        await self.hass.async_add_executor_job(
-            save_mappings, self.hass, mapping_file, self.mappings
-        )
-        self.current_tag = None  # Clear current tag to force re-evaluation
-
-    async def async_map_tag_service(self, service_call):
-        """Handle the map_tag service call."""
-        tag_id = service_call.data.get("tag_id")
-        media_type = service_call.data.get("media_type", "playlist")
-        media_name = service_call.data.get("media_name")
-        alias = service_call.data.get("alias")
-        await self.async_map_tag(tag_id, media_type, media_name, alias)
+        """Map the currently scanned tag to a media item (used by the 'Map' button)."""
+        await _async_map_tag(self.hass, tag_id, media_type, media_name, alias)
 
 

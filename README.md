@@ -67,6 +67,9 @@ This integration requires [HACS (Home Assistant Community Store)](https://hacs.x
     *   **Music Assistant Player**: The media player entity for your jukebox (e.g., `media_player.jukebox_*`).
     *   **Music Assistant Filesystem ID**: The ID for your Music Assistant music source (e.g., `filesystem_local--tkx9ahNv`).
         *   **Tip**: To find this, set up a "local disk" music provider in Music Assistant. Then, go to **Browse > Filesystem** in the Music Assistant UI. The ID will be at the top of the page or in the URL.
+4.  You can change any of these later from **Settings > Devices & Services > RFID Jukebox > Configure**.
+
+**Multiple jukeboxes:** repeat **Add Integration** for each additional jukebox (its own tag sensor + media player pair). All instances share the same tag-to-media mappings, so a tag mapped on one jukebox plays correctly on any of them.
 
 ### Step 4: Map RFID Tags to Media
 
@@ -92,7 +95,7 @@ The firmware includes a software-based mute feature, perfect for controlling pla
 
 ### Mapping File
 
-Tag mappings are stored in `rfid_mappings.yaml` in your Home Assistant configuration directory. You can edit this file manually for advanced configuration.
+Tag mappings are stored in `rfid_mappings.yaml` in your Home Assistant configuration directory. You can edit this file manually for advanced configuration. If you've set up more than one jukebox, they all read from and write to this same file.
 
 ```yaml
 "01:23:45:67:89:AB":
