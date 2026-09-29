@@ -2,7 +2,7 @@
 
 map_tag:
   name: Map Tag to Media
-  description: Creates a new mapping between an RFID tag ID and a media item (playlist or folder).
+  description: Creates a new mapping between an RFID tag ID and a media item (playlist, folder or audiobook).
   fields:
     tag_id:
       name: Tag ID
@@ -12,7 +12,7 @@ map_tag:
         text:
     media_type:
       name: Media Type
-      description: The type of media to map (playlist or folder).
+      description: The type of media to map (playlist, folder or audiobook).
       required: true
       default: "playlist"
       selector:
@@ -20,9 +20,10 @@ map_tag:
           options:
             - "playlist"
             - "folder"
+            - "audiobook"
     media_name:
       name: Media Name
-      description: The name of the playlist or folder path to map.
+      description: The playlist name, folder path, or audiobook name/URI to map.
       required: true
       selector:
         text:
