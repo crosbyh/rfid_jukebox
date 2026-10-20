@@ -29,7 +29,7 @@ class MediaTypeSelect(SelectEntity):
         self._attr_name = "RFID Jukebox Media Type"
         self._attr_unique_id = f"{DOMAIN}_media_type"
         self._attr_icon = "mdi:music-box-outline"
-        self._attr_options = ["playlist", "folder"]
+        self._attr_options = ["playlist", "folder", "audiobook"]
         self._attr_current_option = "folder"
 
     async def async_select_option(self, option: str) -> None:

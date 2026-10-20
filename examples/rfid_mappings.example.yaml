@@ -1,0 +1,30 @@
+# Example rfid_mappings.yaml (lives in the Home Assistant config dir).
+# Keys are tag UIDs as reported by the ESPHome "RFID Jukebox Tag" sensor.
+# Normally written by the integration's "Map Scanned Tag to Media" button;
+# edit by hand for URIs, then reload the integration.
+
+# playlist: a Music Assistant playlist, by name
+"04:A1:B2:C3:D4:E5:80":
+  alias: "Bedtime songs"
+  type: playlist
+  name: "Kids – Bedtime"
+
+# folder: a path relative to the configured MA filesystem provider
+# (here the kids SMB provider, rooted at audio/kids/music)
+"04:11:22:33:44:55:80":
+  alias: "One Light, One Sun"
+  type: folder
+  name: "Raffi/One Light, One Sun"
+
+# audiobook by name: MA resolves it by search. Fine when the title is unique.
+"04:66:77:88:99:AA:80":
+  alias: "Little Blue Truck"
+  type: audiobook
+  name: "Little Blue Truck"
+
+# audiobook by URI: pins the provider (kids Audiobookshelf) and item.
+# The item id is the Audiobookshelf library item id.
+"04:BB:CC:DD:EE:FF:80":
+  alias: "Llama Llama stories"
+  type: audiobook
+  name: "audiobookshelf--S8fEff3V://audiobook/1b816233-e744-43af-8b59-d4b7620e3927"

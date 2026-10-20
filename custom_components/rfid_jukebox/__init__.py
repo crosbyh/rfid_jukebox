@@ -143,10 +143,7 @@ class RFIDJukebox:
                         media_type = mapping.get("type", "playlist")
                         media_name = mapping.get("name")
                         if media_name:
-                            if media_type == "folder":
-                                await self.async_start_new_folder(media_name)
-                            else:
-                                await self.async_start_new_playlist(media_name)
+                            await self.async_start_media(media_type, media_name)
             # Otherwise, it's a new media.
             else:
                 self.current_tag = new_tag
@@ -160,10 +157,7 @@ class RFIDJukebox:
                         media_name = mapping
 
                     if media_name:
-                        if media_type == "folder":
-                            await self.async_start_new_folder(media_name)
-                        else:
-                            await self.async_start_new_playlist(media_name)
+                        await self.async_start_media(media_type, media_name)
                     else:
                         _LOGGER.warning("No media name found for tag: %s", new_tag)
                 else:
@@ -178,6 +172,15 @@ class RFIDJukebox:
                 if media_player_state and media_player_state.state == STATE_PLAYING:
                     await self.async_pause_player()
                 # We don't clear current_tag here, so we can resume it later
+
+    async def async_start_media(self, media_type: str, media_name: str):
+        """Start the mapped media from the beginning (or saved position)."""
+        if media_type == "folder":
+            await self.async_start_new_folder(media_name)
+        elif media_type == "audiobook":
+            await self.async_start_new_audiobook(media_name)
+        else:
+            await self.async_start_new_playlist(media_name)
 
     async def async_start_new_playlist(self, playlist_name: str):
         """Start a new playlist from the beginning."""
@@ -232,6 +235,38 @@ class RFIDJukebox:
             )
         except HomeAssistantError as err:
             _LOGGER.error("MA folder play failed (%s): %s", media_id, err)
+
+    async def async_start_new_audiobook(self, audiobook: str):
+        """Play a Music Assistant audiobook (e.g. from an Audiobookshelf provider).
+
+        `audiobook` is either a name, which Music Assistant resolves by search,
+        or a full URI such as `audiobookshelf--AbCd1234://audiobook/<item id>`,
+        which pins one provider when the same title exists in several.
+        Music Assistant resumes from the saved position, which the
+        Audiobookshelf provider syncs with the server.
+        """
+        from homeassistant.exceptions import HomeAssistantError
+
+        _LOGGER.info("Starting audiobook '%s'", audiobook)
+        try:
+            service_data = {
+                "entity_id": self.config[CONF_MEDIA_PLAYER],
+                "media_id": audiobook,
+                "media_type": "audiobook",
+            }
+            _LOGGER.debug("Calling music_assistant.play_media with data: %s", service_data)
+            await self.hass.services.async_call(
+                "music_assistant",
+                "play_media",
+                service_data,
+                blocking=True,
+            )
+        except HomeAssistantError as err:
+            _LOGGER.error(
+                "Error playing audiobook '%s': %s. Check the title or URI exists in Music Assistant.",
+                audiobook,
+                err,
+            )
 
     async def async_resume_playback(self):
         """Resume the currently paused media player."""

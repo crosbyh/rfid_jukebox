@@ -1,0 +1,26 @@
+# Example Home Assistant automation: mute the Owlbox overnight.
+# The firmware ignores the volume knob while muted, so this is a hard
+# quiet-hours switch. Times are placeholders.
+alias: Owlbox quiet hours
+description: Mute the Owlbox 20:00–08:00
+mode: single
+triggers:
+  - trigger: time
+    at: "20:00:00"
+    id: quiet
+  - trigger: time
+    at: "08:00:00"
+    id: wake
+  # re-apply after the device reboots or reconnects
+  - trigger: state
+    entity_id: media_player.owlbox_speaker   # TODO(owlbox): ESPHome speaker entity
+    from: unavailable
+    id: reconnect
+actions:
+  - variables:
+      quiet_now: "{{ now().hour >= 20 or now().hour < 8 }}"
+  - action: media_player.volume_mute
+    target:
+      entity_id: media_player.owlbox_speaker
+    data:
+      is_volume_muted: "{{ quiet_now }}"

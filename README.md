@@ -71,8 +71,10 @@ This integration requires [HACS (Home Assistant Community Store)](https://hacs.x
 ### Step 4: Map RFID Tags to Media
 
 1.  Scan an RFID tag. The `sensor.rfid_jukebox_last_tag` entity in Home Assistant will update with the tag's UID.
-2.  In the integration's configuration UI, select the media type (`playlist` or `folder`).
+2.  In the integration's configuration UI, select the media type (`playlist`, `folder` or `audiobook`).
 3.  Enter the name of the media (e.g., "Kids Party Time" or "audiobooks/stories_for_kids").
+    For `audiobook`, enter the title, or a Music Assistant URI such as
+    `audiobookshelf--AbCd1234://audiobook/<item id>` to pin one provider.
 4.  Optionally, enter a friendly alias for the tag (e.g., "Snoopy").
 5.  Press the **Map Tag** button to save the mapping.
 
@@ -85,6 +87,20 @@ This integration requires [HACS (Home Assistant Community Store)](https://hacs.x
 1.  **ESPHome** detects an RFID tag and publishes its UID to a `text_sensor` in Home Assistant.
 2.  The **RFID Jukebox integration** maintains a mapping of tag UIDs to media files or playlists.
 3.  When a known tag is detected, the integration calls the appropriate **Music Assistant** service to start playback on the jukebox.
+
+### Audiobooks
+
+An `audiobook` tag plays a Music Assistant audiobook, for example one from an
+Audiobookshelf provider, through `music_assistant.play_media` with
+`media_type: audiobook`. Music Assistant resumes from the saved position, and
+the Audiobookshelf provider syncs progress with the server. So pulling the tag
+and presenting it again later continues the book. A title works when it's
+unique. If the same book exists in several providers (say a parents' and a
+kids' library), use the provider URI instead.
+
+See `examples/` for a mapping file covering all three types and a
+quiet-hours automation, and `esphome/owlbox.yaml` for a variant of the
+firmware config that uses secrets and DHCP.
 
 ### Mute Functionality
 
